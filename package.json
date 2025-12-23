@@ -1,0 +1,34 @@
+{
+  "name": "cutter-cube-scrambler",
+  "version": "1.0.0",
+  "description": "High-quality Rubik's cube scrambler with Kociemba-style solver",
+  "main": "dist/cli.js",
+  "bin": {
+    "cutter-cube-scrambler": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js",
+    "dev": "ts-node src/cli.ts",
+    "test": "jest",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "rubiks",
+    "cube",
+    "scrambler",
+    "kociemba",
+    "solver"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/jest": "^29.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "ts-node": "^10.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {}
+}
