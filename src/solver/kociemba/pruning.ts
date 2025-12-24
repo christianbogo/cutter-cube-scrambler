@@ -12,12 +12,16 @@ import {
   CP_SIZE,
   UDEP_SIZE,
   EP_SIZE,
+  CP_EP_SIZE,
+  UDEP_EP_SIZE,
   applyMoveToEO,
   applyMoveToCO,
   applyMoveToESlice,
   applyMoveToCP,
   applyMoveToUDEP,
   applyMoveToEP,
+  applyMoveToCP_EP,
+  applyMoveToUDEP_EP,
   initializeMoveTables,
 } from "./coordinates";
 
@@ -86,6 +90,16 @@ export const ESlicePruningTable = new PruningTable(
 export const CPPruningTable = new PruningTable(CP_SIZE, "cp_pruning");
 export const UDEPPruningTable = new PruningTable(UDEP_SIZE, "udep_pruning");
 export const EPPruningTable = new PruningTable(EP_SIZE, "ep_pruning");
+
+// Composite tables for Phase 2 optimization
+export const CP_EP_PruningTable = new PruningTable(
+  CP_EP_SIZE,
+  "cp_ep_pruning"
+);
+export const UDEP_EP_PruningTable = new PruningTable(
+  UDEP_EP_SIZE,
+  "udep_ep_pruning"
+);
 
 /**
  * Build a pruning table using BFS
@@ -231,20 +245,30 @@ export function initializePruningTables(): void {
   // First initialize move tables
   initializeMoveTables();
 
-  const tables = [
-    { table: EOPruningTable, func: applyMoveToEO },
-    { table: COPruningTable, func: applyMoveToCO },
-    { table: ESlicePruningTable, func: applyMoveToESlice },
-    { table: CPPruningTable, func: applyMoveToCP },
-    { table: UDEPPruningTable, func: applyMoveToUDEP },
-    { table: EPPruningTable, func: applyMoveToEP },
+  const PHASE2_MOVES = [
+    0, 1, 2, // U, U2, U'
+    9, 10, 11, // D, D2, D'
+    4, 13, 7, 16, // R2, L2, F2, B2
   ];
 
-  for (const { table, func } of tables) {
+  const tables = [
+    { table: EOPruningTable, func: applyMoveToEO, moves: undefined },
+    { table: COPruningTable, func: applyMoveToCO, moves: undefined },
+    { table: ESlicePruningTable, func: applyMoveToESlice, moves: undefined },
+    // Phase 2 Tables
+    { table: CPPruningTable, func: applyMoveToCP, moves: PHASE2_MOVES },
+    { table: UDEPPruningTable, func: applyMoveToUDEP, moves: PHASE2_MOVES },
+    { table: EPPruningTable, func: applyMoveToEP, moves: PHASE2_MOVES },
+    // Composite Tables for Phase 2
+    { table: CP_EP_PruningTable, func: applyMoveToCP_EP, moves: PHASE2_MOVES },
+    { table: UDEP_EP_PruningTable, func: applyMoveToUDEP_EP, moves: PHASE2_MOVES },
+  ];
+
+  for (const { table, func, moves } of tables) {
     // Try to load from cache first
     if (!loadPruningTable(table)) {
       // Build if not found
-      buildPruningTable(table, func);
+      buildPruningTable(table, func, 0, moves);
       savePruningTable(table);
     }
   }
@@ -288,14 +312,22 @@ export function phase1Heuristic(
 }
 
 /**
- * Phase 2 heuristic: maximum of CP, UDEP, EP distances
+ * Phase 2 heuristic: maximum of composite distances
  */
 export function phase2Heuristic(cp: number, udep: number, ep: number): number {
-  const cpDistance = CPPruningTable.get(cp);
-  const udepDistance = UDEPPruningTable.get(udep);
-  const epDistance = EPPruningTable.get(ep);
+  // Compute composite indices
+  const cp_ep = cp * EP_SIZE + ep;
+  const udep_ep = udep * EP_SIZE + ep;
 
-  return Math.max(cpDistance, udepDistance, epDistance);
+  const cpEpDistance = CP_EP_PruningTable.get(cp_ep);
+  const udepEpDistance = UDEP_EP_PruningTable.get(udep_ep);
+
+  // Use classic tables as fallback/augmentation (optional, but max is safe)
+  // const cpDistance = CPPruningTable.get(cp);
+  // const udepDistance = UDEPPruningTable.get(udep);
+  // const epDistance = EPPruningTable.get(ep);
+
+  return Math.max(cpEpDistance, udepEpDistance);
 }
 
 /**
@@ -308,7 +340,9 @@ export function areAllTablesBuilt(): boolean {
     ESlicePruningTable.isBuilt() &&
     CPPruningTable.isBuilt() &&
     UDEPPruningTable.isBuilt() &&
-    EPPruningTable.isBuilt()
+    EPPruningTable.isBuilt() &&
+    CP_EP_PruningTable.isBuilt() &&
+    UDEP_EP_PruningTable.isBuilt()
   );
 }
 

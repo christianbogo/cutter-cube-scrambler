@@ -215,4 +215,16 @@ This implementation is based on Herbert Kociemba's two-phase algorithm, which re
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT License.
+
+## Troubleshooting
+
+### Solver Initialization Issues
+
+If the solver appears stuck during initialization or tests, try clearing the cache directory:
+
+```bash
+rm -rf .cache
+```
+
+This will force the solver to rebuild the pruning tables with the correct configuration.

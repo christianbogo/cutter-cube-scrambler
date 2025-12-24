@@ -351,6 +351,21 @@ export class KociembaSolver {
 
       // Check if solved
       if (!isSolved(testCube)) {
+        if (this.config.verbose) {
+          console.log("Validation Failed.");
+          console.log("Solver Stats (Expected Solved):");
+          const p1 = getPhase1Coord(testCube);
+          const p2 = getPhase2Coord(testCube);
+          console.log(`EO: ${p1.eo}, CO: ${p1.co}, ESlice: ${p1.eslice}`);
+          console.log(`CP: ${p2.cp}, UDEP: ${p2.udep}, EP: ${p2.ep}`);
+
+          // Helper to check arrays
+          const solved = solvedCube();
+          console.log("CPerm match:", arraysEqual(testCube.cPerm, solved.cPerm));
+          console.log("COri match:", arraysEqual(testCube.cOri, solved.cOri));
+          console.log("EPerm match:", arraysEqual(testCube.ePerm, solved.ePerm));
+          console.log("EOri match:", arraysEqual(testCube.eOri, solved.eOri));
+        }
         return {
           valid: false,
           error: "Solution does not result in solved cube",
@@ -363,15 +378,6 @@ export class KociembaSolver {
     }
   }
 
-  /**
-   * Get solver statistics and status
-   */
-  getStatus(): { initialized: boolean; config: SolverConfig } {
-    return {
-      initialized: this.initialized,
-      config: this.config,
-    };
-  }
 
   /**
    * Update solver configuration
@@ -454,4 +460,12 @@ export async function benchmarkSolver(
     averageNodes: successful.length > 0 ? totalNodes / successful.length : 0,
     solutions,
   };
+}
+
+function arraysEqual(a: number[], b: number[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
 }

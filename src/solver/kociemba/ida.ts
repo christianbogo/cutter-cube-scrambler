@@ -52,7 +52,7 @@ const PHASE1_MOVES = Array.from({ length: 18 }, (_, i) => i);
  * Only allow moves that preserve G1 subgroup properties
  * U, U2, U', D, D2, D', R2, L2, F2, B2
  */
-const PHASE2_MOVES = [
+export const PHASE2_MOVES = [
   0,
   1,
   2, // U, U2, U'
@@ -76,7 +76,7 @@ export function searchPhase1(
   let totalNodes = 0;
 
   // Check if already in G1
-  if (startCoord.eo === 0 && startCoord.eslice === 0) {
+  if (startCoord.eo === 0 && startCoord.co === 0 && startCoord.eslice === 0) {
     return {
       solution: [],
       depth: 0,
@@ -122,8 +122,14 @@ function searchPhase1Depth(
   let nodesSearched = 1;
 
   // Check if goal reached
-  if (coord.eo === 0 && coord.eslice === 0) {
+  // Check if goal reached
+  if (coord.eo === 0 && coord.co === 0 && coord.eslice === 0) {
+    // console.log("Phase 1 Goal Reached!");
     return { solution: [], nodesSearched };
+  } else if (coord.eo === 0 && coord.eslice === 0) {
+    // DEBUG: We reached G1 but not CO=0 ??
+    // If we stop here, we are buggy.
+    // console.log(`Reached G1 but CO=${coord.co}`);
   }
 
   // Pruning: if heuristic + current depth > target depth, prune
@@ -299,9 +305,24 @@ function shouldSkipMove(
     return true;
   }
 
-  // For Phase 1, be less restrictive with opposite face moves
-  // Only skip if we just did an opposite face move (to avoid immediate cancellation)
-  // but allow sequences like R L R later in the search
+  // Commutative moves logic:
+  // If faces are opposite (e.g. U and D), enforce strict ordering to avoid duplicates.
+  // U(0) <-> D(3)
+  // R(1) <-> L(4)
+  // F(2) <-> B(5)
+  // We forbid [Back, Front] order, only allow [Front, Back] (or vice versa).
+  // Specifically, if we just did 'D', we cannot do 'U'. But if we did 'U', we can do 'D'.
+  // This imposes the order U before D, R before L, F before B.
+  if (areOppositeFaces(currentFace, lastFace)) {
+    // If the current face index is smaller than the last face index, skip it.
+    // This forces the order: Smaller -> Larger
+    // e.g. last=D(3), current=U(0) -> 0 < 3 -> SKIP. (Forbidden D then U, must be U then D)
+    // e.g. last=U(0), current=D(3) -> 3 > 0 -> OK.
+    if (currentFace < lastFace) {
+      return true;
+    }
+  }
+
   return false;
 }
 

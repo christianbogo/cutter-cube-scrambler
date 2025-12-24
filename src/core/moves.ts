@@ -294,12 +294,12 @@ function createBMove(): MoveTable {
     cornerPerm: [
       Corner.URF, // URF unchanged
       Corner.UFL, // UFL unchanged
-      Corner.UBR, // ULB -> UBR
-      Corner.DBL, // UBR -> DBL
+      Corner.UBR, // ULB gets UBR (3->2)
+      Corner.DRB, // UBR gets DRB (7->3)
       Corner.DFR, // DFR unchanged
       Corner.DLF, // DLF unchanged
-      Corner.DRB, // DBL -> DRB
-      Corner.ULB, // DRB -> ULB
+      Corner.ULB, // DBL gets ULB (2->6)
+      Corner.DBL, // DRB gets DBL (6->7)
     ],
 
     cornerOriDelta: [0, 0, 1, 2, 0, 0, 2, 1],

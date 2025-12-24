@@ -7,17 +7,19 @@ import { Cube, MoveTable, applyMove, solvedCube } from "../../core/cubie";
 import { ALL_MOVES, MoveKey, MOVE_KEYS } from "../../core/moves";
 
 // Phase 1 coordinate sizes
+// Phase 1 coordinate sizes
 export const EO_SIZE = 2048; // 2^11 edge orientations
 export const CO_SIZE = 2187; // 3^7 corner orientations
-export const ESLICE_SIZE = 5; // 0-4 misplaced E-slice edges
+export const ESLICE_SIZE = 495; // C(12,4) E-slice positions
 
 // Phase 2 coordinate sizes
 export const CP_SIZE = 40320; // 8! corner permutations
-export const UDEP_SIZE = 576; // 4! * 4! / 2 UD-edge permutations
+export const UDEP_SIZE = 40320; // 8! UD-edge permutations
 export const EP_SIZE = 24; // 4! E-slice edge permutations
 
 // E-slice edges (middle layer)
-const E_EDGES = [4, 5, 6, 7]; // DR, DF, DL, DB edges
+// FR=8, FL=9, BL=10, BR=11
+const E_EDGES = [8, 9, 10, 11];
 
 /**
  * Phase 1 coordinates
@@ -68,48 +70,45 @@ export function setCornerOrientation(cube: Cube, coord: number): void {
 }
 
 /**
- * E-slice coordinate (0 to 15)
- * Simple implementation: count E-slice edges NOT in E-slice positions
- * 0 = all E-slice edges are in E-slice positions (goal state)
+ * E-slice coordinate (0 to 494)
+ * Represents the positions of the 4 E-slice edges among the 12 edge positions.
+ * This corresponds to C(12,4) = 495 possible combinations.
  */
 export function getESlice(cube: Cube): number {
-  let misplacedCount = 0;
-
-  // Check each E-slice edge to see if it's in an E-slice position
-  for (let i = 0; i < 4; i++) {
-    const edge = E_EDGES[i]; // Which E-slice edge (4,5,6,7)
-    const position = cube.ePerm.indexOf(edge); // Where is this edge?
-
-    if (position < 4 || position >= 8) {
-      // E-slice edge is NOT in E-slice positions (4,5,6,7)
-      misplacedCount++;
+  let coord = 0;
+  let r = 4;
+  for (let i = 11; i >= 0; i--) {
+    if (cube.ePerm[i] >= 8) {
+      // This is an E-slice edge
+      coord += binomial(i, r);
+      r--;
     }
   }
-
-  return misplacedCount;
+  return 494 - coord;
 }
 
-export function setESlice(cube: Cube, coord: number): void {
-  // This simple coordinate can't uniquely determine edge positions
-  // So we'll just ensure the E-slice edges are in the right layer
-  // This is mainly used for pruning table generation
+export function setESlice(cube: Cube, rawCoord: number): void {
+  const coord = 494 - rawCoord;
 
-  if (coord === 0) {
-    // Goal state: put all E-slice edges in E-slice positions
-    for (let i = 0; i < 4; i++) {
-      cube.ePerm[4 + i] = E_EDGES[i];
-    }
-  } else {
-    // Non-goal state: put some E-slice edges in wrong positions
-    // This is a simplified approach for table generation
-    for (let i = 0; i < Math.min(coord, 4); i++) {
-      cube.ePerm[i] = E_EDGES[i]; // Put E-slice edge in U layer
-    }
-    for (let i = coord; i < 4; i++) {
-      cube.ePerm[4 + i] = E_EDGES[i]; // Keep remaining in E-slice
+  // Reset edges
+  // Mark all positions as "non-E-slice" (e.g. edge 0)
+  for (let i = 0; i < 12; i++) cube.ePerm[i] = 0;
+
+  let r = 4;
+  let c = coord;
+  for (let i = 11; i >= 0; i--) {
+    if (c >= binomial(i, r)) {
+      c -= binomial(i, r);
+      cube.ePerm[i] = 8 + (4 - r); // Set as one of the E-slice edges
+      r--;
+    } else {
+      // Not an E-slice edge spot
+      cube.ePerm[i] = 0; // Set as non-E-slice
     }
   }
 }
+
+
 
 /**
  * Phase 2 coordinates
@@ -127,60 +126,60 @@ export function setCornerPermutation(cube: Cube, coord: number): void {
 }
 
 /**
- * UD-Edge Permutation coordinate (0 to 575)
- * Combines U and D edge permutations with parity constraint
+ * UD-Edge Permutation coordinate (0 to 40319)
+ * Permutation of the 8 UD-slice edges (0-7) within their 8 positions.
  */
 export function getUDEdgePermutation(cube: Cube): number {
-  // Extract U-layer edges (positions 0,1,2,3) and D-layer edges (positions 4,5,6,7)
-  const uEdges: number[] = [];
-  const dEdges: number[] = [];
+  const perm: number[] = [];
 
-  // Find where the U and D edges are positioned
-  for (let pos = 0; pos < 12; pos++) {
-    const edge = cube.ePerm[pos];
-    if (edge >= 0 && edge < 4) {
-      // This is a U-layer edge, record its position
-      uEdges[edge] = pos;
-    } else if (edge >= 4 && edge < 8) {
-      // This is a D-layer edge, record its position
-      dEdges[edge - 4] = pos;
+  // Find relative permutation of edges 0-7
+  // They are at positions where ePerm[pos] < 8
+
+  // We strictly look at the 8 UD-slice edges (0-7).
+  // In G1, they must be in the 8 UD-slice positions (0-7).
+  // But we need to handle cases where they are not? 
+  // Phase 2 assumes we are in G1.
+
+  const udEdges = [0, 1, 2, 3, 4, 5, 6, 7];
+
+  // We want to construct an array of length 8 representing the permutation.
+  // The value at index i (0..7) is the EDGE present at the i-th UD-slice position.
+  // Actually, standard permutationToIndex takes an array where result[i] is the element at position i.
+
+  let k = 0;
+  for (let i = 0; i < 12; i++) {
+    if (cube.ePerm[i] < 8) {
+      // This position contains a UD-edge.
+      // Wait, if input is not in G1, this might collect edges < 8 from E-slice positions too.
+      // Phase 2 coordinates are only valid in G1.
+      // In G1, positions 0..7 contain edges 0..7.
+      // So we just read cube.ePerm[0..7].
+      if (i < 8) {
+        perm[i] = cube.ePerm[i];
+      } else {
+        // If we are in G1, this shouldn't happen.
+        // If we are mostly in G1, we expect 8 edges in 0-7.
+      }
     }
   }
 
-  // Convert positions to permutation indices within their respective layers
-  const uPerm = uEdges.map((pos) => {
-    if (pos < 4) return pos; // In U layer
-    if (pos < 8) return pos - 4; // In D layer, map to 0-3
-    return pos - 8; // In middle layer, map to 0-3
-  });
+  // If we are in G1, cube.ePerm[0..7] contains a permutation of 0..7.
+  // We can just take that slice.
+  // BUT: The positions 0..7 map to edges 0..7.
+  // let's verify positions. 0..3 are U, 4..7 are D.
+  // And edges 0..3 are U, 4..7 are D.
+  // So yes.
 
-  const dPerm = dEdges.map((pos) => {
-    if (pos < 4) return pos; // In U layer
-    if (pos < 8) return pos - 4; // In D layer, map to 0-3
-    return pos - 8; // In middle layer, map to 0-3
-  });
-
-  const uPermIndex = permutationToIndex(uPerm);
-  const dPermIndex = permutationToIndex(dPerm);
-
-  return uPermIndex * 24 + dPermIndex;
+  // Use first 8 positions
+  const udPermSlice = cube.ePerm.slice(0, 8);
+  return permutationToIndex(udPermSlice);
 }
 
 export function setUDEdgePermutation(cube: Cube, coord: number): void {
-  const dPermIndex = coord % 24;
-  const uPermIndex = Math.floor(coord / 24);
+  const perm = indexToPermutation(coord, 8);
 
-  const uPerm = indexToPermutation(uPermIndex, 4);
-  const dPerm = indexToPermutation(dPermIndex, 4);
-
-  // Place U edges in U positions
-  for (let i = 0; i < 4; i++) {
-    cube.ePerm[uPerm[i]] = i; // U edge i goes to position uPerm[i]
-  }
-
-  // Place D edges in D positions
-  for (let i = 0; i < 4; i++) {
-    cube.ePerm[4 + dPerm[i]] = 4 + i; // D edge 4+i goes to position 4+dPerm[i]
+  for (let i = 0; i < 8; i++) {
+    cube.ePerm[i] = perm[i];
   }
 }
 
@@ -191,17 +190,14 @@ export function setUDEdgePermutation(cube: Cube, coord: number): void {
 export function getESlicePermutation(cube: Cube): number {
   const eSlicePermutation: number[] = [];
 
-  // Find where each E-slice edge is positioned within the E-slice positions (4,5,6,7)
-  for (let eSliceEdge = 0; eSliceEdge < 4; eSliceEdge++) {
-    const actualEdge = E_EDGES[eSliceEdge]; // DR=4, DF=5, DL=6, DB=7
+  // In G1, E-edges are in positions 8,9,10,11
+  // We want to know which edge is in 8, which in 9, etc.
 
-    // Find which E-slice position (4,5,6,7) contains this edge
-    for (let pos = 4; pos < 8; pos++) {
-      if (cube.ePerm[pos] === actualEdge) {
-        eSlicePermutation[eSliceEdge] = pos - 4; // Map position 4,5,6,7 to 0,1,2,3
-        break;
-      }
-    }
+  for (let i = 0; i < 4; i++) {
+    // Check edge at position 8+i
+    const edge = cube.ePerm[8 + i];
+    // Map edge 8->0, 9->1, 10->2, 11->3
+    eSlicePermutation[i] = edge - 8;
   }
 
   return permutationToIndex(eSlicePermutation);
@@ -210,9 +206,12 @@ export function getESlicePermutation(cube: Cube): number {
 export function setESlicePermutation(cube: Cube, coord: number): void {
   const perm = indexToPermutation(coord, 4);
 
-  // Place E-slice edges according to the permutation
+  // Place E-slice edges (8-11) according to the permutation
+  // In G1, E-slice edges are at positions 8-11
   for (let i = 0; i < 4; i++) {
-    cube.ePerm[4 + perm[i]] = E_EDGES[i];
+    cube.ePerm[8 + i] = E_EDGES[perm[i]]; // Map 0->8, 1->9 etc
+    // Wait, E_EDGES is [8,9,10,11]. perm[i] is 0..3.
+    // So perm[0]=1 means first slot (8) has edge 9.
   }
 }
 
@@ -345,6 +344,33 @@ export function applyMoveToEP(coord: number, moveIdx: number): number {
 }
 
 /**
+ * Composite Move Functions (Phase 2 optimization)
+ * Combine CP+EP and UDEP+EP for larger pruning tables.
+ */
+export const CP_EP_SIZE = CP_SIZE * EP_SIZE;
+export const UDEP_EP_SIZE = UDEP_SIZE * EP_SIZE;
+
+export function applyMoveToCP_EP(coord: number, moveIdx: number): number {
+  const cp = Math.floor(coord / EP_SIZE);
+  const ep = coord % EP_SIZE;
+
+  const nextCp = CP_MOVE_TABLE[moveIdx][cp];
+  const nextEp = EP_MOVE_TABLE[moveIdx][ep];
+
+  return nextCp * EP_SIZE + nextEp;
+}
+
+export function applyMoveToUDEP_EP(coord: number, moveIdx: number): number {
+  const udep = Math.floor(coord / EP_SIZE);
+  const ep = coord % EP_SIZE;
+
+  const nextUdep = UDEP_MOVE_TABLE[moveIdx][udep];
+  const nextEp = EP_MOVE_TABLE[moveIdx][ep];
+
+  return nextUdep * EP_SIZE + nextEp;
+}
+
+/**
  * Utility functions
  */
 
@@ -412,8 +438,8 @@ export function isInG1(cube: Cube): boolean {
     if (cube.eOri[i] !== 0) return false;
   }
 
-  // E-slice edges must be in E-slice positions (4,5,6,7)
-  const eSlicePositions = [4, 5, 6, 7];
+  // E-slice edges must be in E-slice positions (8,9,10,11)
+  const eSlicePositions = [8, 9, 10, 11];
   const edgesInESlice = eSlicePositions.map((pos) => cube.ePerm[pos]);
   const eSliceInPlace = E_EDGES.every((edge) => edgesInESlice.includes(edge));
 
